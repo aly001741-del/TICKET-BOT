@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -9,150 +9,104 @@ const client = new Client({
     ]
 });
 
-// تم وضع التوكن والآيدي الخاص بك هنا مباشرة
-const TOKEN = 'MTM0MjIwMzM4NjE5OTU0Mzg5OQ.G-cMC9.qDsTVByFcB_lyjoWuv2wqit8m3fKBE3kpdKWI4';
-const OWNER_ID = '1120390766913667214'; // الآيدي الخاص بك للتحكم الكامل
-const SUPPORT_ROLE_ID = 'حط_ايدي_رتبة_الإدارة_هنا'; // استبدل هذه برتبة الإداريين بسيرفرك
+const TRANSCRIPT_LOG_ID = '1539066371344826580';
+const REPORT_LOG_ID = '1539066194009661530';
 
 client.once('ready', () => {
-    console.log(`[BOT READY] تم تسجيل الدخول بنجاح باسم: ${client.user.tag}`);
+    console.log(`Logged in as ${client.user.tag}!`);
 });
 
-// أمر !tsetup لإرسال القائمة الاحترافية (متاح للأدمن أو لك خصيصاً)
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    if (message.content === '!tsetup') {
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator) && message.author.id !== OWNER_ID) {
-            return message.reply('❌ ما عندك صلاحية لإستخدام هذا الأمر!');
-        }
-
+    if (message.content === '!ticket') {
         const embed = new EmbedBuilder()
-            .setTitle('🎫 مركز الدعم الفني والتكتات الرسمي')
-            .setDescription('أهلاً بك عزيزي العضو!\nلفتح تكت جديدة، يرجى اختيار القسم المناسب من القائمة أدناه، وسيقوم فريق الإدارة بخدمتك بأسرع وقت ممكن.')
-            .setColor('#2b2d31')
-            .setThumbnail(message.guild.iconURL({ dynamic: true }))
-            .setFooter({ text: 'نظام التكتات المتطور', iconURL: client.user.displayAvatarURL() });
+            .setTitle('🎫 نظام التكتات والبلاغات')
+            .setDescription('اختر القسم المناسب لفتح تكت أو إرسال بلاغ:')
+            .setColor(0x0099ff);
 
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new StringSelectMenuBuilder()
-                    .setCustomId('ticket_menu')
-                    .setPlaceholder('📌 | اضغط هنا لاختيار قسم التكت')
-                    .addOptions([
-                        {
-                            label: 'الدعم الفني العام',
-                            description: 'لحل المشاكل والاستفسارات العامة',
-                            value: 'ticket_general',
-                            emoji: '🛠️'
-                        },
-                        {
-                            label: 'الشكاوى والإبلاغات',
-                            description: 'للإبلاغ عن عضو أو إداري مخالف',
-                            value: 'ticket_report',
-                            emoji: '⚠️'
-                        },
-                        {
-                            label: 'الرعاية والشراء',
-                            description: 'للاستفسار عن العروض والخدمات المدفوعة',
-                            value: 'ticket_shop',
-                            emoji: '🛒'
-                        }
-                    ])
-            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('open_ticket')
+                .setLabel('فتح تكت (ملاحظات)')
+                .setStyle(ButtonStyle.Primary)
+                .setEmoji('📝'),
+            new ButtonBuilder()
+                .setCustomId('open_report')
+                .setLabel('تقديم بلاغ')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('🚨')
+        );
 
         await message.channel.send({ embeds: [embed], components: [row] });
-        await message.delete();
     }
 });
 
-// التعامل مع اختيارات القائمة والأزرار
 client.on('interactionCreate', async interaction => {
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_menu') {
-        const guild = interaction.guild;
-        const member = interaction.member;
-        const selectedValue = interaction.values[0];
-        
-        let categoryName = 'الدعم الفني';
-        if (selectedValue === 'ticket_report') categoryName = 'شكاوى';
-        if (selectedValue === 'ticket_shop') categoryName = 'مشتريات';
+    if (!interaction.isButton()) return;
 
-        await interaction.deferReply({ ephemeral: true });
+    const guild = interaction.guild;
+    const member = interaction.member;
+
+    if (interaction.customId === 'open_ticket' || interaction.customId === 'open_report') {
+        const isReport = interaction.customId === 'open_report';
+        const channelName = isReport ? `report-${member.user.username}` : `ticket-${member.user.username}`;
+        const parentId = isReport ? REPORT_LOG_ID : TRANSCRIPT_LOG_ID;
 
         try {
-            const ticketChannel = await guild.channels.create({
-                name: `ticket-${member.user.username}-${categoryName}`,
+            const permissionOverwrites = [
+                {
+                    id: guild.id,
+                    deny: [PermissionFlagsBits.ViewChannel],
+                },
+                {
+                    id: member.id,
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                }
+            ];
+
+            const channelOptions = {
+                name: channelName,
                 type: ChannelType.GuildText,
-                permissionOverwrites: [
-                    {
-                        id: guild.id,
-                        deny: [PermissionFlagsBits.ViewChannel],
-                    },
-                    {
-                        id: member.id,
-                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles],
-                    },
-                    {
-                        id: SUPPORT_ROLE_ID,
-                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles],
-                    },
-                    {
-                        id: client.user.id,
-                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
-                    },
-                ],
+                permissionOverwrites: permissionOverwrites
+            };
+
+            if (parentId) {
+                channelOptions.parent = parentId;
+            }
+
+            const ticketChannel = await guild.channels.create(channelOptions);
+
+            const controlRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('close_ticket')
+                    .setLabel('قفل التكت')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒')
+            );
+
+            await ticketChannel.send({
+                content: `مرحباً ${member}, تم فتح ${isReport ? 'البلاغ' : 'التكت'} بنجاح! سيتم خدمتك قريباً.`,
+                components: [controlRow]
             });
 
-            const welcomeEmbed = new EmbedBuilder()
-                .setTitle(`🎫 تكت جديدة: ${categoryName}`)
-                .setDescription(`مرحباً بك <@${member.id}>!\nتم فتح التكت بنجاح. يرجى توضيح مشكلتك أو طلبك بالتفصيل، وسيقوم أحد الإداريين بالرد عليك قريباً.\n\n**أزرار التحكم بالتكت في الأسفل:**`)
-                .setColor('#5865F2')
-                .setTimestamp();
-
-            const controlRow = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('claim_ticket')
-                        .setLabel('استلام التكت 🙋‍♂️')
-                        .setStyle(ButtonStyle.Success),
-                    new ButtonBuilder()
-                        .setCustomId('close_ticket')
-                        .setLabel('إغلاق التكت 🔒')
-                        .setStyle(ButtonStyle.Danger)
-                );
-
-            await ticketChannel.send({ content: `<@${member.id}> | <@&${SUPPORT_ROLE_ID}>`, embeds: [welcomeEmbed], components: [controlRow] });
-            await interaction.editReply({ content: `✅ تم إنشاء تكت الخاص بك بنجاح: ${ticketChannel}` });
-
+            await interaction.reply({ content: `✅ تم إنشاء تكتك بنجاح: ${ticketChannel}`, ephemeral: true });
         } catch (error) {
             console.error(error);
-            await interaction.editReply({ content: '❌ حدث خطأ أثناء إنشاء روم التكت، تأكد من صلاحيات البوت.' });
+            await interaction.reply({ content: '❌ حدث خطأ أثناء إنشاء التكت، تأكد من صلاحيات البوت وأيديهات الرومات.', ephemeral: true });
         }
     }
 
-    if (interaction.isButton()) {
-        if (interaction.customId === 'claim_ticket') {
-            if (!interaction.member.roles.cache.has(SUPPORT_ROLE_ID) && interaction.user.id !== OWNER_ID) {
-                return interaction.reply({ content: '❌ هذا الزر مخصص للإدارة فقط!', ephemeral: true });
+    if (interaction.customId === 'close_ticket') {
+        await interaction.reply({ content: '🔒 جاري إغلاق التكت وحذفه...' });
+        setTimeout(async () => {
+            try {
+                await interaction.channel.delete();
+            } catch (e) {
+                console.error(e);
             }
-            const embed = new EmbedBuilder()
-                .setDescription(`🙋‍♂️ **تم استلام التكت بواسطة الإداري:** <@${interaction.user.id}>`)
-                .setColor('#00FF00');
-            await interaction.reply({ embeds: [embed] });
-        }
-
-        if (interaction.customId === 'close_ticket') {
-            const channel = interaction.channel;
-            await interaction.reply({ content: '🔒 **جاري إغلاق وتدمير التكت خلال 5 ثوانٍ...**' });
-            setTimeout(async () => {
-                try {
-                    await channel.delete();
-                } catch (err) {
-                    console.error('فشل الحذف:', err);
-                }
-            }, 5000);
-        }
+        }, 3000);
     }
 });
 
-client.login(TOKEN);
+client.login('MTM0MjIwMzM4NjE5OTU0Mzg5OQ.GtelrY.UhQPC0tEexfpG964eVeuI-W7OCDsivvY2RsDaM');
